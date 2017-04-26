@@ -28,9 +28,7 @@
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from urllib2 import urlopen
 from model import *
-import argparse
 import datetime
 import gtfs_realtime_pb2
 import yaml
@@ -41,59 +39,22 @@ import sys
 
 config = yaml.safe_load(open("config.yaml"))
 
-p = argparse.ArgumentParser(description="Configure GTFSrDB")
-
-p.add_argument('-t', '--trip-updates', dest='tripUpdates', default=None,
-               help='The trip updates URL', metavar='URL')
-
-p.add_argument('-a', '--alerts', default=None, dest='alerts',
-               help='The alerts URL', metavar='URL')
-
-p.add_argument('-p', '--vehicle-positions', dest='vehiclePositions', default=None,
-               help='The vehicle positions URL', metavar='URL')
-
-p.add_argument('-d', '--database', default=None, dest='dsn',
-               help='Database connection string', metavar='DSN')
-
-p.add_argument('-o', '--discard-old', default=False, dest='deleteOld',
-               action='store_true', help='Discard old updates, so the database is always current')
-
-p.add_argument('-c', '--create-tables', default=False, dest='create',
-               action='store_true', help="Create tables if they aren't found")
-
-p.add_argument('-w', '--wait', default=30, type=int, metavar='SECS',
-               dest='timeout', help='Time to wait between requests (in seconds)')
-
-p.add_argument('-v', '--verbose', default=False, dest='verbose',
-               action='store_true', help='Print generated SQL')
-
-p.add_argument('-l', '--language', default='en', dest='lang', metavar='LANG',
-               help='When multiple translations are available, prefer this language')
-
-p.add_argument('-1', '--once', default=False, dest='once', action='store_true',
-               help='only run the loader one time')
-
-p.add_option('-s', '--socketio', default=False, dest='sio', action='store_true',
-             help='run socket.io server')
-
-opts = p.parse_args()
-
-if config['database'] == None:
-    print 'No database specified!'
+if config['database'] is None:
+    print('No database specified!')
     exit(1)
 
-if config['gtfsr']['alerts'] == None and config['gtfsr']['trip_updates'] == None and config['gtfsr']['vehicle_positions'] == None:
-    print 'No trip updates, alerts, or vehicle positions URLs were specified!'
+if config['gtfsr']['alerts'] is None and config['gtfsr']['trip_updates'] is None and config['gtfsr']['vehicle_positions'] is None:
+    print('No trip updates, alerts, or vehicle positions URLs were specified!')
     exit(1)
 
-if config['gtfsr']['alerts'] == None:
-    print 'Warning: no alert URL specified, proceeding without alerts'
+if config['gtfsr']['alerts'] is None:
+    print('Warning: no alert URL specified, proceeding without alerts')
 
-if config['gtfsr']['trip_updates'] == None:
-    print 'Warning: no trip update URL specified, proceeding without trip updates'
+if config['gtfsr']['trip_updates'] is None:
+    print('Warning: no trip update URL specified, proceeding without trip updates')
 
-if config['gtfsr']['vehicle_positions'] == None:
-    print 'Warning: no vehicle positions URL specified, proceeding without vehicle positions'
+if config['gtfsr']['vehicle_positions'] is None:
+    print('Warning: no vehicle positions URL specified, proceeding without vehicle positions')
     
 # Connect to the database
 engine = create_engine(config['database']['connection_string'], echo=config['general']['verbose'])
@@ -105,14 +66,14 @@ session = sessionmaker(bind=engine)()
 for table in Base.metadata.tables.keys():
     if not engine.has_table(table):
         if config['database']['create_tables']:
-            print 'Creating table %s' % table
+            print('Creating table %s' % table)
             Base.metadata.tables[table].create(engine)
         else:
             print('Missing table %s! Use -c to create it.' % table)
             exit(1)
 
 # Get a specific translation from a TranslatedString
-def getTrans(string, lang):
+def get_trans(string, lang):
     # If we don't find the requested language, return this
     untranslated = None
 
@@ -135,9 +96,11 @@ try:
             if config['database']['overwrite']:
                 # Go through all of the tables that we create, clear them
                 # Don't mess with other tables (i.e., tables from static GTFS)
+                print('Deleting old data... ', end='')
                 for theClass in AllClasses:
                     for obj in session.query(theClass):
                         session.delete(obj)
+                print('done')
 
             if config['gtfsr']['trip_updates']:
                 r = requests.get(config['gtfsr']['trip_updates'])
@@ -217,9 +180,9 @@ try:
                             end=alert.active_period[0].end,
                             cause=alert.DESCRIPTOR.enum_types_by_name['Cause'].values_by_number[alert.cause].name,
                             effect=alert.DESCRIPTOR.enum_types_by_name['Effect'].values_by_number[alert.effect].name,
-                            url=getTrans(alert.url, config['general']['lang']),
-                            header_text=getTrans(alert.header_text, config['general']['lang']),
-                            description_text=getTrans(alert.description_text,
+                            url=get_trans(alert.url, config['general']['lang']),
+                            header_text=get_trans(alert.header_text, config['general']['lang']),
+                            description_text=get_trans(alert.description_text,
                                                       config['general']['lang'])
                         )
 
