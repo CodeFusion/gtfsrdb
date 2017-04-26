@@ -28,13 +28,18 @@
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+from urllib2 import urlopen
 from model import *
 import argparse
 import datetime
 import gtfs_realtime_pb2
+import yaml
 import requests
 import time
 import sys
+
+
+config = yaml.safe_load(open("config.yaml"))
 
 p = argparse.ArgumentParser(description="Configure GTFSrDB")
 
@@ -68,27 +73,30 @@ p.add_argument('-l', '--language', default='en', dest='lang', metavar='LANG',
 p.add_argument('-1', '--once', default=False, dest='once', action='store_true',
                help='only run the loader one time')
 
+p.add_option('-s', '--socketio', default=False, dest='sio', action='store_true',
+             help='run socket.io server')
+
 opts = p.parse_args()
 
-if opts.dsn is None:
-    print('No database specified!')
+if config['database'] == None:
+    print 'No database specified!'
     exit(1)
 
-if opts.alerts is None and opts.tripUpdates is None and opts.vehiclePositions is None:
-    print('No trip updates, alerts, or vehicle positions URLs were specified!')
+if config['gtfsr']['alerts'] == None and config['gtfsr']['trip_updates'] == None and config['gtfsr']['vehicle_positions'] == None:
+    print 'No trip updates, alerts, or vehicle positions URLs were specified!'
     exit(1)
 
-if opts.alerts is None:
-    print('Warning: no alert URL specified, proceeding without alerts')
+if config['gtfsr']['alerts'] == None:
+    print 'Warning: no alert URL specified, proceeding without alerts'
 
-if opts.tripUpdates is None:
-    print('Warning: no trip update URL specified, proceeding without trip updates')
+if config['gtfsr']['trip_updates'] == None:
+    print 'Warning: no trip update URL specified, proceeding without trip updates'
 
-if opts.vehiclePositions is None:
-    print('Warning: no vehicle positions URL specified, proceeding without vehicle positions')
-
+if config['gtfsr']['vehicle_positions'] == None:
+    print 'Warning: no vehicle positions URL specified, proceeding without vehicle positions'
+    
 # Connect to the database
-engine = create_engine(opts.dsn, echo=opts.verbose)
+engine = create_engine(config['database']['connection_string'], echo=config['general']['verbose'])
 # sessionmaker returns a class
 session = sessionmaker(bind=engine)()
 
@@ -96,13 +104,12 @@ session = sessionmaker(bind=engine)()
 # Base from model.py
 for table in Base.metadata.tables.keys():
     if not engine.has_table(table):
-        if opts.create:
-            print('Creating table %s' % table)
+        if config['database']['create_tables']:
+            print 'Creating table %s' % table
             Base.metadata.tables[table].create(engine)
         else:
             print('Missing table %s! Use -c to create it.' % table)
             exit(1)
-
 
 # Get a specific translation from a TranslatedString
 def getTrans(string, lang):
@@ -120,21 +127,20 @@ def getTrans(string, lang):
             untranslated = t.text
     return untranslated
 
-
 try:
     keep_running = True
     while keep_running:
         try:
-            # if True:
-            if opts.deleteOld:
+        #if True:
+            if config['database']['overwrite']:
                 # Go through all of the tables that we create, clear them
                 # Don't mess with other tables (i.e., tables from static GTFS)
                 for theClass in AllClasses:
                     for obj in session.query(theClass):
                         session.delete(obj)
 
-            if opts.tripUpdates:
-                r = requests.get(opts.tripUpdates)
+            if config['gtfsr']['trip_updates']:
+                r = requests.get(config['gtfsr']['trip_updates'])
                 fm = gtfs_realtime_pb2.FeedMessage()
                 fm.ParseFromString(r.content)
 
@@ -190,8 +196,8 @@ try:
 
                     session.add(dbtu)
 
-            if opts.alerts:
-                r = requests.get(opts.alerts)
+            if config['gtfsr']['alerts']:
+                r = requests.get(config['gtfsr']['alerts'])
                 fm = gtfs_realtime_pb2.FeedMessage()
                 fm.ParseFromString(r.content)
 
@@ -211,10 +217,10 @@ try:
                             end=alert.active_period[0].end,
                             cause=alert.DESCRIPTOR.enum_types_by_name['Cause'].values_by_number[alert.cause].name,
                             effect=alert.DESCRIPTOR.enum_types_by_name['Effect'].values_by_number[alert.effect].name,
-                            url=getTrans(alert.url, opts.lang),
-                            header_text=getTrans(alert.header_text, opts.lang),
+                            url=getTrans(alert.url, config['general']['lang']),
+                            header_text=getTrans(alert.header_text, config['general']['lang']),
                             description_text=getTrans(alert.description_text,
-                                                      opts.lang)
+                                                      config['general']['lang'])
                         )
 
                         session.add(dbalert)
@@ -231,8 +237,8 @@ try:
                                 trip_start_date=ie.trip.start_date)
                             session.add(dbie)
                             dbalert.InformedEntities.append(dbie)
-            if opts.vehiclePositions:
-                r = requests.get(opts.vehiclePositions)
+            if config['gtfsr']['vehicle_positions']:
+                r = requests.get(config['gtfsr']['vehicle_positions'])
                 fm = gtfs_realtime_pb2.FeedMessage()
                 fm.ParseFromString(r.content)
 
@@ -246,6 +252,7 @@ try:
 
                 print('Adding %s vehicle_positions' % len(fm.entity))
                 for entity in fm.entity:
+
                     vp = entity.vehicle
 
                     dbvp = VehiclePosition(
@@ -282,11 +289,11 @@ try:
         # fails
         # also, makes it easier to end the process with ctrl-c, b/c a 
         # KeyboardInterrupt here will end the program (cleanly)
-        if opts.once:
+        if config['general']['run_once']:
             print("Executed the load ONCE ... going to stop now...")
             keep_running = False
         else:
-            time.sleep(opts.timeout)
+            time.sleep(config['general']['wait'])
 
 finally:
     print("Closing session . . .")

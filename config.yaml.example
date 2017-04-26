@@ -1,0 +1,17 @@
+socket:
+  host: ~
+  port: ~
+database:
+  connection_string: ~
+  create_tables: true
+  overwrite: false
+gtfsr:
+  alerts: ~
+  trip_updates: ~
+  vehicle_positions: ~
+general:
+  wait: 30
+  verbose: false
+  lang: en
+  run_once: false
+  secret: 'sEcrET!'
