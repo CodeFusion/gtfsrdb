@@ -61,6 +61,8 @@ engine = create_engine(config['database']['connection_string'], echo=config['gen
 # sessionmaker returns a class
 session = sessionmaker(bind=engine)()
 
+latestTimestamp = None
+
 # Check if it has the tables
 # Base from model.py
 for table in Base.metadata.tables.keys():
@@ -139,6 +141,10 @@ try:
                         vehicle_label=tu.vehicle.label,
                         vehicle_license_plate=tu.vehicle.license_plate,
                         timestamp=tu.timestamp)
+
+                    if (latestTimestamp is None) or (tu.timestamp > latestTimestamp):
+                        latestTimestamp = tu.timestamp
+
 
                     for stu in tu.stop_time_update:
                         dbstu = StopTimeUpdate(
@@ -235,14 +241,15 @@ try:
                             vp.occupancy_status].name,
                         timestamp=vp.timestamp)
 
+                    if (latestTimestamp is None) or (tu.timestamp > latestTimestamp):
+                        latestTimestamp = tu.timestamp
+
                     session.add(dbvp)
 
             # This does deletes and adds, since it's atomic it never leaves us
             # without data
             session.commit()
 
-            # Add confirmation message to allow parent process to detect completion
-            print
         except:
             # else:
             print('Exception occurred in iteration')
@@ -256,7 +263,7 @@ try:
             print("Executed the load ONCE ... going to stop now...")
             keep_running = False
         else:
-            time.sleep(config['general']['wait'])
+            time.sleep((latestTimestamp + config['general']['wait']) - time.time)
 
 finally:
     print("Closing session . . .")
