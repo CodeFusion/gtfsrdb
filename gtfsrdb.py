@@ -138,7 +138,7 @@ try:
                         vehicle_id=tu.vehicle.id,
                         vehicle_label=tu.vehicle.label,
                         vehicle_license_plate=tu.vehicle.license_plate,
-                        timestamp=timestamp)
+                        timestamp=tu.timestamp)
 
                     for stu in tu.stop_time_update:
                         dbstu = StopTimeUpdate(
@@ -233,7 +233,7 @@ try:
                         occupancy_status=
                         gtfs_realtime_pb2.VehicleDescriptor.OccupancyStatus.DESCRIPTOR.values_by_number[
                             vp.occupancy_status].name,
-                        timestamp=timestamp)
+                        timestamp=vp.timestamp)
 
                     session.add(dbvp)
 
